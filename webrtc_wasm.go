@@ -51,6 +51,51 @@ func (x Conn) Release() {
 	x.onTrack.Release()
 }
 
+// All properties are defined as optional in the JS API, so they may return zero values.
+type CodecParameters struct {
+	v js.Value
+}
+
+func (x CodecParameters) Channels() uint {
+	v := x.v.Get("channels")
+	if v.IsUndefined() {
+		return 0
+	}
+	return uint(v.Int())
+}
+
+func (x CodecParameters) ClockRate() uint {
+	v := x.v.Get("clockRate")
+	if v.IsUndefined() {
+		return 0
+	}
+	return uint(v.Int())
+}
+
+func (x CodecParameters) MimeType() string {
+	v := x.v.Get("mimeType")
+	if v.IsUndefined() {
+		return ""
+	}
+	return v.String()
+}
+
+func (x CodecParameters) PayloadType() byte {
+	v := x.v.Get("payloadType")
+	if v.IsUndefined() {
+		return 0
+	}
+	return byte(v.Int())
+}
+
+func (x CodecParameters) Sdp() string {
+	v := x.v.Get("sdpFmtpLine")
+	if v.IsUndefined() {
+		return ""
+	}
+	return v.String()
+}
+
 type EncodingParameters struct {
 	v js.Value
 }
@@ -86,26 +131,25 @@ func (x EncodingParameters) MaxFramerateSet(fps float64) {
 	x.v.Set("maxFramerate", fps)
 }
 
-func (x EncodingParameters) PayloadType() byte {
-	v := x.v.Get("codecPayloadType")
-	return byte(v.Int())
-}
-
-func (x EncodingParameters) Ptime() uint {
-	v := x.v.Get("ptime")
-	return uint(v.Int())
-}
-
 func (x EncodingParameters) PtimeSet(ms uint) {
 	x.v.Set("ptime", ms)
 }
 
-func (x EncodingParameters) Rid() string {
-	return x.v.Get("rid").String()
-}
-
 type SendParameters struct {
 	v js.Value
+}
+
+func (x SendParameters) Codecs() []CodecParameters {
+	codecs := x.v.Get("codecs")
+
+	n := codecs.Length()
+	o := make([]CodecParameters, n)
+	for i := 0; i < n; i++ {
+		v := codecs.Index(i)
+		o[i] = CodecParameters{v}
+	}
+
+	return o
 }
 
 // Modify the return values directly, then call Sender.ParametersSet(x).

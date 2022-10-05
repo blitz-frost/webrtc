@@ -63,12 +63,12 @@ func (x *Channel) Writer() (msgio.Writer, error) {
 }
 
 type signaler struct {
-	fnCandidate func(string) error
+	fnCandidate func(webrtc.ICECandidateInit) error
 	fnSdp       func(webrtc.SessionDescription) error
 }
 
 func (x *signaler) candidate(candidate *webrtc.ICECandidate) error {
-	arg := candidate.ToJSON().Candidate
+	arg := candidate.ToJSON()
 	return x.fnCandidate(arg)
 }
 
@@ -103,8 +103,8 @@ func (x *signaler) setup(conn *webrtc.PeerConnection, c msgio.Conn, rCh, wCh byt
 
 	// prepare rpc answer side
 	lib := rpc.MakeLibrary()
-	lib.Register("candidate", func(s string) error {
-		return conn.AddICECandidate(webrtc.ICECandidateInit{Candidate: s})
+	lib.Register("candidate", func(c webrtc.ICECandidateInit) error {
+		return conn.AddICECandidate(c)
 	})
 	lib.Register("sdp", func(sdp webrtc.SessionDescription) error {
 		if err := conn.SetRemoteDescription(sdp); err != nil {
