@@ -74,11 +74,11 @@ func (x *signaler) candidate(candidate *webrtc.ICECandidate) error {
 
 func (x *signaler) setup(conn *webrtc.PeerConnection, c msgio.Conn, rCh, wCh byte, answerFunc func() error) error {
 	// ensure concurrency
-	rc, err := msgio.NewReaderChainerAsync(c)
+	rc, err := msgio.ReaderChainerAsyncNew(c)
 	if err != nil {
 		return err
 	}
-	wg := msgio.NewWriterGiverMutex(c)
+	wg := msgio.WriterGiverMutexNew(c)
 	block := msg.ConnBlock[msgio.Reader, msgio.Writer]{rc, wg}
 
 	// form ExchangeConn
