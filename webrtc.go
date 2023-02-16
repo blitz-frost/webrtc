@@ -3,20 +3,22 @@ package webrtc
 import (
 	"sync"
 
-	"github.com/blitz-frost/encoding/json"
-	msgenc "github.com/blitz-frost/encoding/msg"
 	"github.com/blitz-frost/io"
-	msgio "github.com/blitz-frost/io/msg"
-	"github.com/blitz-frost/msg"
+	"github.com/blitz-frost/io/msg"
 	"github.com/blitz-frost/rpc"
 	"github.com/pion/webrtc/v3"
+)
+
+var (
+	CandidateProcedureName = "webrtcCandidate"
+	SdpProcedureName       = "webrtcSdp"
 )
 
 type Channel struct {
 	V *webrtc.DataChannel
 
 	buf []byte // buffer outgoing messages
-	dst msgio.ReaderTaker
+	dst msg.ReaderTaker
 }
 
 // NewChannel wraps a [webrtc.DataChannel] to fit the msg framework.
@@ -24,7 +26,7 @@ func NewChannel(v *webrtc.DataChannel) *Channel {
 	x := Channel{
 		V:   v,
 		buf: []byte{},
-		dst: msgio.Void{},
+		dst: msg.Void{},
 	}
 	v.OnMessage(func(m webrtc.DataChannelMessage) {
 		x.dst.ReaderTake((*io.BytesReader)(&m.Data))
@@ -51,14 +53,14 @@ func (x *Channel) OnOpen(fn func()) {
 	x.V.OnOpen(fn)
 }
 
-func (x *Channel) ReaderChain(dst msgio.ReaderTaker) error {
+func (x *Channel) ReaderChain(dst msg.ReaderTaker) error {
 	x.dst = dst
 	return nil
 }
 
 // The returned value is also a [msg.Canceler].
 // Not concurrent safe.
-func (x *Channel) Writer() (msgio.Writer, error) {
+func (x *Channel) Writer() (msg.Writer, error) {
 	return (*writer)(x), nil
 }
 
@@ -72,41 +74,15 @@ func (x *signaler) candidate(candidate *webrtc.ICECandidate) error {
 	return x.fnCandidate(arg)
 }
 
-func (x *signaler) setup(conn *webrtc.PeerConnection, c msgio.Conn, rCh, wCh byte, answerFunc func() error) error {
-	// ensure concurrency
-	rc, err := msgio.ReaderChainerAsyncNew(c)
-	if err != nil {
-		return err
-	}
-	wg := msgio.WriterGiverMutexNew(c)
-	block := msg.ConnBlock[msgio.Reader, msgio.Writer]{rc, wg}
-
-	// form ExchangeConn
-	mc, err := msgio.MultiplexConnOf(block)
-	if err != nil {
-		return err
-	}
-	rConn := msgio.ConnOf(mc, rCh)
-	wConn := msgio.ConnOf(mc, wCh)
-
-	ec, err := msgio.ExchangeConnOf(rConn, wConn)
-	if err != nil {
-		return err
-	}
-	ecEnc, err := msgenc.ExchangeConnOf(ec, json.Codec)
-	if err != nil {
-		return err
-	}
-
+func (x *signaler) setup(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Library, answerFunc func() error) error {
 	pending := make([]*webrtc.ICECandidate, 0)
 	mux := sync.Mutex{}
 
-	// prepare rpc answer side
-	lib := rpc.MakeLibrary()
-	lib.Register("candidate", func(c webrtc.ICECandidateInit) error {
+	// answer side
+	lib.Register(CandidateProcedureName, func(c webrtc.ICECandidateInit) error {
 		return conn.AddICECandidate(c)
 	})
-	lib.Register("sdp", func(sdp webrtc.SessionDescription) error {
+	lib.Register(SdpProcedureName, func(sdp webrtc.SessionDescription) error {
 		if err := conn.SetRemoteDescription(sdp); err != nil {
 			return err
 		}
@@ -124,17 +100,9 @@ func (x *signaler) setup(conn *webrtc.PeerConnection, c msgio.Conn, rCh, wCh byt
 		return nil
 	})
 
-	answerGate := rpc.MakeAnswerGate(lib)
-	if err := ecEnc.ReaderChain(answerGate); err != nil {
-		return err
-	}
-
-	// prepare rpc call side
-	callGate := rpc.MakeCallGate(ecEnc)
-	cli := rpc.MakeClient(callGate)
-
-	cli.Bind("candidate", &x.fnCandidate)
-	cli.Bind("sdp", &x.fnSdp)
+	// call side
+	cli.Bind(CandidateProcedureName, &x.fnCandidate)
+	cli.Bind(SdpProcedureName, &x.fnSdp)
 
 	conn.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate == nil {
@@ -155,8 +123,11 @@ func (x *signaler) setup(conn *webrtc.PeerConnection, c msgio.Conn, rCh, wCh byt
 	return nil
 }
 
-// SignalAnswer sets up the WebRTC answer side of the signaling process for a peer connection, using the provided data carrier.
-func SignalAnswer(conn *webrtc.PeerConnection, c msgio.Conn) error {
+// SignalAnswer sets up the WebRTC answer side of the signaling process for a peer connection.
+//
+// The underlying RPC system must be capable of concurrent, as well as recursive calls.
+// Two procedures will be added, whose names are determined by the global variables CandidateProcedureName and SdpProcedureName.
+func SignalAnswer(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Library) error {
 	sig := signaler{}
 	answerFunc := func() error {
 		answer, err := conn.CreateAnswer(nil)
@@ -169,16 +140,20 @@ func SignalAnswer(conn *webrtc.PeerConnection, c msgio.Conn) error {
 		return conn.SetLocalDescription(answer)
 	}
 
-	return sig.setup(conn, c, 1, 0, answerFunc)
+	return sig.setup(conn, cli, lib, answerFunc)
 }
 
-// SignalOffer sets up the WebRTC offer side of the signaling process for a peer connection, using the provided data carrier.
+// SignalOffer sets up the WebRTC offer side of the signaling process for a peer connection.
+//
+// The underlying RPC system must be capable of concurrent, as well as recursive calls.
+// Two procedures will be added, whose names are determined by the global variables CandidateProcedureName and SdpProcedureName.
+//
 // The returned function can be used to start the initial process, as well as renegotiation.
-func SignalOffer(conn *webrtc.PeerConnection, c msgio.Conn) (func() error, error) {
+func SignalOffer(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Library) (func() error, error) {
 	sig := signaler{}
 	answerFunc := func() error { return nil }
 
-	if err := sig.setup(conn, c, 0, 1, answerFunc); err != nil {
+	if err := sig.setup(conn, cli, lib, answerFunc); err != nil {
 		return nil, err
 	}
 

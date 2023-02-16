@@ -6,7 +6,7 @@ require (
 	github.com/blitz-frost/encoding v0.1.2
 	github.com/blitz-frost/io v0.2.7
 	github.com/blitz-frost/msg v0.1.1
-	github.com/blitz-frost/rpc v0.2.1
+	github.com/blitz-frost/rpc v0.2.2
 	github.com/blitz-frost/wasm v0.2.7
 	github.com/pion/webrtc/v3 v3.1.53
 )

@@ -10,6 +10,8 @@ github.com/blitz-frost/msg v0.1.1 h1:C9fGUhBeW7BcJMBhMirWNom09QX6cwpEf0LIW7/vibI
 github.com/blitz-frost/msg v0.1.1/go.mod h1:uQy8Tigo19XA/i/GeXC3+NtTFUzD08mdagIezoN44ec=
 github.com/blitz-frost/rpc v0.2.1 h1:RIhs5EkxRtqhKbMNE5MfC6tHDWCt3Eo9OFIKGJpYDR8=
 github.com/blitz-frost/rpc v0.2.1/go.mod h1:s8FIlnVAWxUZ7MJnsEZLg32cPKK+gXVErR7a0ly4rC8=
+github.com/blitz-frost/rpc v0.2.2 h1:plZHdmBDUYacqe+iBDj/f/u8MCVAdxEoxX4Tv27AIgg=
+github.com/blitz-frost/rpc v0.2.2/go.mod h1:nhLMrlJsbPjuvta6Em0ubBPs4ZyyN9VgDrZeHs1DL+U=
 github.com/blitz-frost/wasm v0.2.7 h1:uDtYxNFG1TdDplWBTrhN7K+xntwYkz6I/8UaZSprtQA=
 github.com/blitz-frost/wasm v0.2.7/go.mod h1:/oqJgh4ZiosSyCTvMM0kGbO5yCxmC8swtFGIuGjYvSQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
