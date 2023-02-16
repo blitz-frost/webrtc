@@ -64,14 +64,26 @@ func (x *Channel) Writer() (msg.Writer, error) {
 	return (*writer)(x), nil
 }
 
+// Sdp separates the webrtc.SessionDescription exported part, making it encoding agnostic.
+type Sdp struct {
+	Type   webrtc.SDPType
+	String string
+}
+
 type signaler struct {
-	fnCandidate func(webrtc.ICECandidateInit) error
-	fnSdp       func(webrtc.SessionDescription) error
+	fnCandidate func(string) error
+	fnSdp       func(Sdp) error
 }
 
 func (x *signaler) candidate(candidate *webrtc.ICECandidate) error {
-	arg := candidate.ToJSON()
-	return x.fnCandidate(arg)
+	return x.fnCandidate(candidate.ToJSON().Candidate)
+}
+
+func (x *signaler) sdp(sd webrtc.SessionDescription) error {
+	return x.fnSdp(Sdp{
+		Type:   sd.Type,
+		String: sd.SDP,
+	})
 }
 
 func (x *signaler) setup(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Library, answerFunc func() error) error {
@@ -79,10 +91,21 @@ func (x *signaler) setup(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Li
 	mux := sync.Mutex{}
 
 	// answer side
-	lib.Register(CandidateProcedureName, func(c webrtc.ICECandidateInit) error {
-		return conn.AddICECandidate(c)
+	lib.Register(CandidateProcedureName, func(s string) error {
+		zero := uint16(0)
+		empty := ""
+		ci := webrtc.ICECandidateInit{
+			Candidate:     s,
+			SDPMid:        &empty,
+			SDPMLineIndex: &zero,
+		}
+		return conn.AddICECandidate(ci)
 	})
-	lib.Register(SdpProcedureName, func(sdp webrtc.SessionDescription) error {
+	lib.Register(SdpProcedureName, func(s Sdp) error {
+		sdp := webrtc.SessionDescription{
+			Type: s.Type,
+			SDP:  s.String,
+		}
 		if err := conn.SetRemoteDescription(sdp); err != nil {
 			return err
 		}
@@ -135,7 +158,7 @@ func SignalAnswer(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Library) 
 			return err
 		}
 
-		go sig.fnSdp(answer)
+		go sig.sdp(answer)
 
 		return conn.SetLocalDescription(answer)
 	}
@@ -166,7 +189,7 @@ func SignalOffer(conn *webrtc.PeerConnection, cli rpc.Client, lib rpc.Library) (
 			return err
 		}
 
-		return sig.fnSdp(offer)
+		return sig.sdp(offer)
 	}
 
 	return fn, nil
