@@ -14,24 +14,24 @@ import (
 type Conn struct {
 	v js.Value
 
-	onTrack js.Func
+	trackHandler js.Func
 }
 
-func AsConn(v js.Value) *Conn {
+func ConnOf(v js.Value) *Conn {
 	return &Conn{
 		v: v,
 	}
 }
 
-func (x Conn) AddTrack(track media.Track) (Sender, error) {
+func (x Conn) TrackAdd(track media.Track) (Sender, error) {
 	v, err := wasm.Call(x.v, "addTrack", track.Js())
 	return Sender{v}, err
 }
 
-func (x *Conn) OnTrack(fn func(track media.Track, streams []media.Stream)) {
-	x.onTrack.Release()
+func (x *Conn) TrackHandle(fn func(track media.Track, streams []media.Stream)) {
+	x.trackHandler.Release()
 
-	x.onTrack = js.FuncOf(func(this js.Value, args []js.Value) any {
+	x.trackHandler = js.FuncOf(func(this js.Value, args []js.Value) any {
 		track := media.AsTrack(args[0].Get("track"))
 		streamsJs := args[0].Get("streams")
 		var streams []media.Stream
@@ -44,11 +44,11 @@ func (x *Conn) OnTrack(fn func(track media.Track, streams []media.Stream)) {
 		return nil
 	})
 
-	x.v.Set("ontrack", x.onTrack)
+	x.v.Set("ontrack", x.trackHandler)
 }
 
 func (x Conn) Release() {
-	x.onTrack.Release()
+	x.trackHandler.Release()
 }
 
 // All properties are defined as optional in the JS API, so they may return zero values.
@@ -114,20 +114,20 @@ func (x EncodingParameters) DownscaleSet(factor float64) {
 	x.v.Set("scaleResolutionDownBy", factor)
 }
 
-func (x EncodingParameters) MaxBitrate() uint {
+func (x EncodingParameters) BitrateMax() uint {
 	v := x.v.Get("maxBitrate")
 	return uint(v.Int())
 }
 
-func (x EncodingParameters) MaxBitrateSet(br uint) {
+func (x EncodingParameters) BitrateMaxSet(br uint) {
 	x.v.Set("maxBitrate", br)
 }
 
-func (x EncodingParameters) MaxFramerate() float64 {
+func (x EncodingParameters) FramerateMax() float64 {
 	return x.v.Get("maxFramerate").Float()
 }
 
-func (x EncodingParameters) MaxFramerateSet(fps float64) {
+func (x EncodingParameters) FramerateMaxSet(fps float64) {
 	x.v.Set("maxFramerate", fps)
 }
 
@@ -178,6 +178,12 @@ func (x Sender) Parameters() SendParameters {
 // Must be called with the return value of the last Parameters method call.
 func (x Sender) ParametersSet(params SendParameters) error {
 	promise := x.v.Call("setParameters", params.v)
+	_, err := wasm.Await(promise)
+	return err
+}
+
+func (x Sender) TrackReplace(track media.Track) error {
+	promise := x.v.Call("replaceTrack", track.Js())
 	_, err := wasm.Await(promise)
 	return err
 }

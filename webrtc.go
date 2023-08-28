@@ -21,8 +21,8 @@ type Channel struct {
 	dst msg.ReaderTaker
 }
 
-// NewChannel wraps a [webrtc.DataChannel] to fit the msg framework.
-func NewChannel(v *webrtc.DataChannel) *Channel {
+// ChannelNew wraps a [webrtc.DataChannel] to fit the msg framework.
+func ChannelNew(v *webrtc.DataChannel) *Channel {
 	x := Channel{
 		V:   v,
 		buf: []byte{},
@@ -38,18 +38,18 @@ func (x *Channel) Close() error {
 	return x.V.Close()
 }
 
-func (x *Channel) OnClose(fn func()) {
+func (x *Channel) CloseHandle(fn func()) {
 	x.V.OnClose(fn)
 }
 
 /*
 Not present in wasm version
-func (x Channel) OnError(fn func(error)) {
+func (x Channel) ErrorHandle(fn func(error)) {
 	x.ch.OnError(fn)
 }
 */
 
-func (x *Channel) OnOpen(fn func()) {
+func (x *Channel) OpenHandle(fn func()) {
 	x.V.OnOpen(fn)
 }
 
