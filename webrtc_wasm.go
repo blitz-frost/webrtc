@@ -5,55 +5,47 @@
 package webrtc
 
 import (
-	"syscall/js"
-
 	"github.com/blitz-frost/wasm"
 	"github.com/blitz-frost/wasm/media"
 )
 
 type Conn struct {
-	v js.Value
+	V wasm.Object
 
-	trackHandler js.Func
+	trackFn wasm.DynamicFunction
 }
 
-func ConnOf(v js.Value) *Conn {
-	return &Conn{
-		v: v,
-	}
-}
-
-func (x Conn) TrackAdd(track media.Track) (Sender, error) {
-	v, err := wasm.Call(x.v, "addTrack", track.Js())
+func (x *Conn) TrackAdd(track *media.Track) (Sender, error) {
+	v, err := x.V.Call("addTrack", track.V)
 	return Sender{v}, err
 }
 
-func (x *Conn) TrackHandle(fn func(track media.Track, streams []media.Stream)) {
-	x.trackHandler.Release()
-
-	x.trackHandler = js.FuncOf(func(this js.Value, args []js.Value) any {
-		track := media.AsTrack(args[0].Get("track"))
+func (x *Conn) TrackHandle(fn func(track *media.Track, streams []media.Stream)) {
+	inter := func(this wasm.Value, args []wasm.Value) (wasm.Any, error) {
+		track := media.Track{}
+		track.V = args[0].Get("track")
 		streamsJs := args[0].Get("streams")
 		var streams []media.Stream
 		for i, n := 0, streamsJs.Length(); i < n; i++ {
 			v := streamsJs.Index(i)
-			streams = append(streams, media.AsStream(v))
+			streams = append(streams, media.Stream{v})
 		}
 
-		fn(track, streams)
-		return nil
-	})
+		fn(&track, streams)
+		return nil, nil
+	}
+	x.trackFn.Remake(wasm.InterfaceFunc(inter))
 
-	x.v.Set("ontrack", x.trackHandler)
+	x.V.Set("ontrack", x.trackFn.Value())
 }
 
-func (x Conn) Release() {
-	x.trackHandler.Release()
+func (x *Conn) Wipe() {
+	x.trackFn.Wipe()
 }
 
 // All properties are defined as optional in the JS API, so they may return zero values.
 type CodecParameters struct {
-	v js.Value
+	v wasm.Value
 }
 
 func (x CodecParameters) Channels() uint {
@@ -97,7 +89,7 @@ func (x CodecParameters) Sdp() string {
 }
 
 type EncodingParameters struct {
-	v js.Value
+	v wasm.Value
 }
 
 func (x EncodingParameters) Active() bool {
@@ -136,7 +128,7 @@ func (x EncodingParameters) PtimeSet(ms uint) {
 }
 
 type SendParameters struct {
-	v js.Value
+	v wasm.Value
 }
 
 func (x SendParameters) Codecs() []CodecParameters {
@@ -167,7 +159,7 @@ func (x SendParameters) Encodings() []EncodingParameters {
 }
 
 type Sender struct {
-	v js.Value
+	v wasm.Value
 }
 
 func (x Sender) Parameters() SendParameters {
@@ -177,13 +169,13 @@ func (x Sender) Parameters() SendParameters {
 
 // Must be called with the return value of the last Parameters method call.
 func (x Sender) ParametersSet(params SendParameters) error {
-	promise := x.v.Call("setParameters", params.v)
-	_, err := wasm.Await(promise)
+	promise := wasm.Promise(x.v.Call("setParameters", params.v))
+	_, err := promise.Await()
 	return err
 }
 
-func (x Sender) TrackReplace(track media.Track) error {
-	promise := x.v.Call("replaceTrack", track.Js())
-	_, err := wasm.Await(promise)
+func (x Sender) TrackReplace(track *media.Track) error {
+	promise := wasm.Promise(x.v.Call("replaceTrack", track.V))
+	_, err := promise.Await()
 	return err
 }

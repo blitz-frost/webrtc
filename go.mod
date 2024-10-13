@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/blitz-frost/io v0.2.8
 	github.com/blitz-frost/rpc v0.2.3
-	github.com/blitz-frost/wasm v0.2.13
+	github.com/blitz-frost/wasm v0.3.0
 	github.com/pion/webrtc/v3 v3.2.29
 )
 
@@ -13,6 +13,7 @@ require (
 	github.com/blitz-frost/conv v0.3.1 // indirect
 	github.com/blitz-frost/encoding v0.1.2 // indirect
 	github.com/blitz-frost/msg v0.1.1 // indirect
+	github.com/blitz-frost/resource v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/pion/datachannel v1.5.5 // indirect
