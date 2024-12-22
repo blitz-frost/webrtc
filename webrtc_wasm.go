@@ -39,6 +39,16 @@ func (x *Conn) TrackHandle(fn func(track *media.Track, streams []media.Stream)) 
 	x.V.Set("ontrack", x.trackFn.Value())
 }
 
+func (x *Conn) TransceiverAddKind(kind media.Kind) (Transceiver, error) {
+	v, err := x.V.Call("addTransceiver", string(kind))
+	return Transceiver{v}, err
+}
+
+func (x *Conn) TransceiverAddTrack(track *media.Track) (Transceiver, error) {
+	v, err := x.V.Call("addTransceiver", track.V)
+	return Transceiver{v}, err
+}
+
 func (x *Conn) Wipe() {
 	x.trackFn.Wipe()
 }
@@ -179,3 +189,21 @@ func (x Sender) TrackReplace(track *media.Track) error {
 	_, err := promise.Await()
 	return err
 }
+
+type Transceiver struct {
+	v wasm.Value
+}
+
+func (x Transceiver) DirectionSet(v TransceiverDirection) {
+	x.v.Set("direction", string(v))
+}
+
+type TransceiverDirection string
+
+const (
+	TransceiverDirectionBoth     TransceiverDirection = "sendrecv"
+	TransceiverDirectionInactive TransceiverDirection = "inactive"
+	TransceiverDirectionReceive  TransceiverDirection = "recvonly"
+	TransceiverDirectionSend     TransceiverDirection = "sendonly"
+	TransceiverDirectionStopped  TransceiverDirection = "stopped"
+)
