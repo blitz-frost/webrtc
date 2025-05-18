@@ -9,10 +9,19 @@ import (
 	"github.com/blitz-frost/wasm/media"
 )
 
+func (x *Channel) ErrorHandle(fn func(error)) {
+	// wasm variant doesn't have OnError
+	x.errorHandle = fn
+}
+
 type Conn struct {
 	V wasm.Object
 
 	trackFn wasm.DynamicFunction
+}
+
+func (x *Conn) SenderRemove(sender Sender) {
+	x.V.Call("removeTrack", sender.v)
 }
 
 func (x *Conn) TrackAdd(track *media.Track) (Sender, error) {
@@ -20,10 +29,16 @@ func (x *Conn) TrackAdd(track *media.Track) (Sender, error) {
 	return Sender{v}, err
 }
 
-func (x *Conn) TrackHandle(fn func(track *media.Track, streams []media.Stream)) {
+func (x *Conn) TrackAddStream(track *media.Track, stream media.Stream) (Sender, error) {
+	v, err := x.V.Call("addTrack", track.V, stream.V)
+	return Sender{v}, err
+}
+
+func (x *Conn) TrackHandle(fn func(*media.Track, []media.Stream, Transceiver)) {
 	inter := func(this wasm.Value, args []wasm.Value) (wasm.Any, error) {
-		track := media.Track{}
+		var track media.Track
 		track.V = args[0].Get("track")
+
 		streamsJs := args[0].Get("streams")
 		var streams []media.Stream
 		for i, n := 0, streamsJs.Length(); i < n; i++ {
@@ -31,7 +46,10 @@ func (x *Conn) TrackHandle(fn func(track *media.Track, streams []media.Stream)) 
 			streams = append(streams, media.Stream{v})
 		}
 
-		fn(&track, streams)
+		var transceiver Transceiver
+		transceiver.v = args[0].Get("transceiver")
+
+		fn(&track, streams, transceiver)
 		return nil, nil
 	}
 	x.trackFn.Remake(wasm.InterfaceFunc(inter))
@@ -87,6 +105,16 @@ func (x CodecParameters) Sdp() string {
 	}
 	return v.String()
 }
+
+const (
+	DirectionBoth    Direction = "sendrecv"
+	DirectionNone    Direction = "inactive"
+	DirectionReceive Direction = "recvonly"
+	DirectionSend    Direction = "sendonly"
+	DirectionStopped Direction = "stopped" // this must not be manually set on a Transceiver
+)
+
+type Direction string
 
 type EncodingParameters struct {
 	v wasm.Value
@@ -178,4 +206,24 @@ func (x Sender) TrackReplace(track *media.Track) error {
 	promise := wasm.Promise(x.v.Call("replaceTrack", track.V))
 	_, err := promise.Await()
 	return err
+}
+
+type Transceiver struct {
+	v wasm.Value
+}
+
+// Direction returns the actual current direction, which might differ from the previously set one.
+func (x Transceiver) Direction() Direction {
+	o := x.v.Get("currentDirection").String()
+	return Direction(o)
+}
+
+// DirectionSet sets the desired direction, which is not applied immediately.
+// Must not be called with [DirectionStopped], use [Transceiver.Stop] instead.
+func (x Transceiver) DirectionSet(dir Direction) {
+	x.v.Set("direction", string(dir))
+}
+
+func (x Transceiver) Stop() {
+	x.v.Call("stop")
 }
