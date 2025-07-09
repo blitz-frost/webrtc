@@ -6,7 +6,7 @@ import (
 	"github.com/blitz-frost/io"
 	"github.com/blitz-frost/io/msg"
 	"github.com/blitz-frost/rpc"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 var (
